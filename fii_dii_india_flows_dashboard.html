@@ -991,8 +991,31 @@ async function fetchLiveNSE(isManual = false) {
 
   let success = false;
 
+  /* ── TIER 0: GitHub Actions auto-committed JSON (works for EVERYONE) ── */
+  if (!success) {
+    const dataSources = [
+      './data/latest.json',                                                         // GitHub Pages / same origin
+      'https://raw.githubusercontent.com/MrChartist/fii-dii-data/main/data/latest.json',  // Direct raw (CORS-safe)
+    ];
+    for (const src of dataSources) {
+      try {
+        const res = await fetch(`${src}?t=${Date.now()}`, { signal: AbortSignal.timeout(6000) });
+        if (res.ok) {
+          const d = await res.json();
+          if (d.date && d.fii_net !== undefined) {
+            await injectLiveRow(d);
+            scheduleNextRefresh();
+            success = true;
+            console.log('[SYNC] ✅ Live data from GitHub auto-update:', src);
+            break;
+          }
+        }
+      } catch (e) { /* try next */ }
+    }
+  }
+
   /* ── TIER 1: Local Python server (only tried on localhost) ── */
-  if (IS_LOCAL) {
+  if (!success && IS_LOCAL) {
     try {
       const res = await fetch(`${LOCAL_SERVER}/api/fii-dii`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
